@@ -42,5 +42,13 @@
     "placeholders": { "domain": { "content": "$1" } }
   },
   "tabsLabel": { "message": "Sections" },
-  "whitelistInputLabel": { "message": "Domain to add to the whitelist" }
+  "whitelistInputLabel": { "message": "Domain to add to the whitelist" },
+
+  "keyboardHint": { "message": "1–9 choose container · 0 no container · Esc cancel" },
+  "tabOrder": { "message": "Order" },
+  "orderDesc": { "message": "Fixed order of containers in the picker. The position determines the number key." },
+  "btnMoveUp": { "message": "Move up" },
+  "btnMoveDown": { "message": "Move down" },
+  "toastOrderSaved": { "message": "Order saved" },
+  "orderEmpty": { "message": "No containers found" }
 }
