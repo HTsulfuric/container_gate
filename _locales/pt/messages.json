@@ -1,6 +1,6 @@
 {
   "extName": {
-    "message": "ContainerGate",
+    "message": "Gatekey",
     "description": "Nome da extensão"
   },
   "extDescription": {
@@ -38,7 +38,7 @@
   "thisSite": { "message": "este site" },
   "linkWord": { "message": "link" },
   "openLinkTitle": {
-    "message": "Abrir $DOMAIN$ — ContainerGate",
+    "message": "Abrir $DOMAIN$ — Gatekey",
     "placeholders": { "domain": { "content": "$1" } }
   },
   "tabsLabel": { "message": "Seções" },

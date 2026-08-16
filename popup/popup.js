@@ -1,5 +1,5 @@
 /**
- * ContainerGate - popup.js
+ * Gatekey - popup.js
  * Lógica del popup: lista blanca, reglas y orden de contenedores.
  */
 

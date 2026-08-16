@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
-  "name": "ContainerGate",
-  "version": "1.0.1",
+  "name": "Gatekey",
+  "version": "1.1.0",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "author": "Axel Tinoco (original), Leo Itoh (fork)",
@@ -28,7 +28,7 @@
       "32": "icons/icon32.png",
       "48": "icons/icon48.png"
     },
-    "default_title": "ContainerGate",
+    "default_title": "Gatekey",
     "default_popup": "popup/popup.html"
   },
 

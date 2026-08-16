@@ -1,5 +1,5 @@
 /**
- * ContainerGate - interstitial/interstitial.js
+ * Gatekey - interstitial/interstitial.js
  * Página intermedia que se muestra ANTES de cargar la URL externa.
  * La página real nunca se carga hasta que el usuario elige contenedor.
  */
@@ -58,7 +58,7 @@
     try {
       containers = await cgGetOrderedContainers();
     } catch (err) {
-      console.error("[ContainerGate] No se pudieron leer los contenedores:", err);
+      console.error("[Gatekey] No se pudieron leer los contenedores:", err);
     }
 
     const grid = document.getElementById("cg-grid");

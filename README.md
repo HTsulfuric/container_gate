@@ -1,6 +1,6 @@
-# ContainerGate 🚪
+# Gatekey 🚪
 
-> **This is a fork.** The original ContainerGate was written by
+> **Gatekey is a fork of ContainerGate.** The original was written by
 > [Axel Tinoco](https://github.com/AxelTinoco/ContainerGate) and is licensed under
 > MPL-2.0; this fork keeps that license. It is not affiliated with or endorsed by
 > the original author, and it is not the version published on addons.mozilla.org.
@@ -42,7 +42,7 @@
 1. Abre Firefox y navega a `about:debugging`
 2. Haz clic en **"Este Firefox"**
 3. Haz clic en **"Cargar complemento temporal"**
-4. Selecciona el archivo `manifest.json` dentro de la carpeta `ContainerGate/`
+4. Selecciona el archivo `manifest.json` dentro de la carpeta del proyecto
 
 > La extensión estará activa hasta que cierres Firefox. Para uso permanente, empaquétala como `.xpi`.
 
@@ -51,8 +51,8 @@
 ## 📦 Empaquetar como .xpi
 
 ```bash
-cd ContainerGate/
-zip -r ../ContainerGate.xpi . -x "*.DS_Store" -x "__MACOSX/*"
+cd gatekey/
+zip -r ../gatekey.xpi . -x "*.DS_Store" -x "__MACOSX/*"
 ```
 
 Para instalar permanentemente sin firma (solo en Firefox Developer Edition o Nightly):
@@ -65,7 +65,7 @@ Para instalar permanentemente sin firma (solo en Firefox Developer Edition o Nig
 ## 🗂️ Estructura del proyecto
 
 ```
-ContainerGate/
+gatekey/
 ├── manifest.json          # Configuración de la extensión (Manifest V2)
 ├── background.js          # Lógica principal de intercepción
 ├── i18n.js                # Helper de i18n para páginas inyectadas
@@ -104,12 +104,12 @@ ContainerGate/
 ## 💡 Cómo funciona
 
 1. Una app externa (Slack, email, terminal) abre una URL en Firefox
-2. ContainerGate detecta que la tab no tiene tab de origen (viene de fuera)
+2. Gatekey detecta que la tab no tiene tab de origen (viene de fuera)
 3. Verifica si el dominio está en la lista blanca → si sí, la deja pasar
 4. Verifica si hay una regla guardada → si sí, la abre directamente en ese contenedor
 5. Si no hay regla, muestra el **modal de selección**
 6. El usuario elige un contenedor (o abre sin contenedor)
-7. ContainerGate abre la URL en el contenedor elegido y cierra la tab original
+7. Gatekey abre la URL en el contenedor elegido y cierra la tab original
 
 ---
 

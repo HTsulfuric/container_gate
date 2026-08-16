@@ -1,6 +1,6 @@
 {
   "extName": {
-    "message": "ContainerGate",
+    "message": "Gatekey",
     "description": "Название расширения"
   },
   "extDescription": {
@@ -38,7 +38,7 @@
   "thisSite": { "message": "этот сайт" },
   "linkWord": { "message": "ссылку" },
   "openLinkTitle": {
-    "message": "Открыть $DOMAIN$ — ContainerGate",
+    "message": "Открыть $DOMAIN$ — Gatekey",
     "placeholders": { "domain": { "content": "$1" } }
   },
   "tabsLabel": { "message": "Разделы" },
