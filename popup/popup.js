@@ -1,18 +1,12 @@
 /**
  * ContainerGate - popup.js
- * Lógica del popup del toolbar: lista blanca y reglas.
+ * Lógica del popup: lista blanca, reglas y orden de contenedores.
  */
-
-const COLOR_MAP = {
-  blue: "#3b82f6", turquoise: "#06b6d4", green: "#22c55e",
-  yellow: "#eab308", orange: "#f97316", red: "#ef4444",
-  pink: "#ec4899", purple: "#a855f7",
-};
 
 // Atajo para traducir cadenas dinámicas
 const t = (key) => browser.i18n.getMessage(key) || key;
 
-// ─── Tab switching (patrón ARIA Tabs) ─────────────────────────────────────
+// ─── Pestañas (patrón ARIA Tabs) ─────────────────────────────────────────
 
 const tabs = Array.from(document.querySelectorAll(".tab"));
 
@@ -23,27 +17,53 @@ function activateTab(tab, setFocus = true) {
     el.setAttribute("aria-selected", selected ? "true" : "false");
     el.tabIndex = selected ? 0 : -1;
   });
-  document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach((content) => {
+    content.classList.remove("active");
+  });
   document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
   if (setFocus) tab.focus();
 }
 
-tabs.forEach((tab, i) => {
+tabs.forEach((tab, index) => {
   tab.addEventListener("click", () => activateTab(tab, false));
-  tab.addEventListener("keydown", (e) => {
+  tab.addEventListener("keydown", (event) => {
     let next = null;
-    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = tabs[(i + 1) % tabs.length];
-    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = tabs[(i - 1 + tabs.length) % tabs.length];
-    else if (e.key === "Home") next = tabs[0];
-    else if (e.key === "End") next = tabs[tabs.length - 1];
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      next = tabs[(index + 1) % tabs.length];
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      next = tabs[(index - 1 + tabs.length) % tabs.length];
+    } else if (event.key === "Home") {
+      next = tabs[0];
+    } else if (event.key === "End") {
+      next = tabs[tabs.length - 1];
+    }
     if (next) {
-      e.preventDefault();
+      event.preventDefault();
       activateTab(next);
     }
   });
 });
 
-// ─── Whitelist ────────────────────────────────────────────────────────────
+// ─── Presentación de contenedores ────────────────────────────────────────
+
+function createContainerSwatch(container) {
+  const swatch = document.createElement("span");
+  swatch.className = "container-swatch";
+  swatch.setAttribute("aria-hidden", "true");
+  swatch.style.setProperty("--cg-color", container?.colorCode || "var(--neutral-container)");
+
+  if (typeof container?.iconUrl === "string" && container.iconUrl.trim()) {
+    const icon = document.createElement("span");
+    icon.className = "container-icon";
+    const iconUrl = container.iconUrl.replace(/["\\\n\r]/g, "");
+    icon.style.maskImage = `url("${iconUrl}")`;
+    swatch.appendChild(icon);
+  }
+
+  return swatch;
+}
+
+// ─── Lista blanca ────────────────────────────────────────────────────────
 
 async function loadWhitelist() {
   const whitelist = await browser.runtime.sendMessage({ type: "CG_GET_WHITELIST" });
@@ -68,7 +88,7 @@ async function loadWhitelist() {
     btn.dataset.domain = domain;
     btn.textContent = t("btnRemove");
     btn.addEventListener("click", async () => {
-      const updated = whitelist.filter((d) => d !== domain);
+      const updated = whitelist.filter((item) => item !== domain);
       await browser.runtime.sendMessage({ type: "CG_SET_WHITELIST", whitelist: updated });
       showToast(t("toastDomainRemoved"));
       loadWhitelist();
@@ -94,11 +114,11 @@ document.getElementById("whitelist-add").addEventListener("click", async () => {
   loadWhitelist();
 });
 
-document.getElementById("whitelist-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") document.getElementById("whitelist-add").click();
+document.getElementById("whitelist-input").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") document.getElementById("whitelist-add").click();
 });
 
-// ─── Rules ────────────────────────────────────────────────────────────────
+// ─── Reglas ──────────────────────────────────────────────────────────────
 
 async function loadRules() {
   const [rules, containers] = await Promise.all([
@@ -107,7 +127,9 @@ async function loadRules() {
   ]);
 
   const containerMap = {};
-  containers.forEach((c) => { containerMap[c.cookieStoreId] = c; });
+  containers.forEach((container) => {
+    containerMap[container.cookieStoreId] = container;
+  });
 
   const list = document.getElementById("rules-list");
   list.replaceChildren();
@@ -120,7 +142,6 @@ async function loadRules() {
 
   entries.forEach(([domain, containerId]) => {
     const container = containerMap[containerId];
-    const color = container ? (COLOR_MAP[container.color] || "#6b7280") : "#6b7280";
     const name = container ? container.name : containerId;
 
     const li = document.createElement("li");
@@ -132,10 +153,7 @@ async function loadRules() {
 
     const badge = document.createElement("span");
     badge.className = "item-container-badge";
-    const dot = document.createElement("span");
-    dot.className = "item-dot";
-    dot.style.background = color;
-    badge.append(dot, document.createTextNode(" " + name));
+    badge.append(createContainerSwatch(container), document.createTextNode(name));
 
     const btn = document.createElement("button");
     btn.className = "btn btn-ghost";
@@ -152,7 +170,104 @@ async function loadRules() {
   });
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────
+// ─── Orden de contenedores ───────────────────────────────────────────────
+
+let orderedContainers = [];
+
+function createMoveButton(container, direction, disabled) {
+  const messageKey = direction === "up" ? "btnMoveUp" : "btnMoveDown";
+  const label = t(messageKey);
+  const button = document.createElement("button");
+  button.className = "order-move";
+  button.type = "button";
+  button.dataset.cookieStoreId = container.cookieStoreId;
+  button.dataset.direction = direction;
+  button.dataset.i18nAriaLabel = messageKey;
+  button.dataset.i18nTitle = messageKey;
+  button.setAttribute("aria-label", label);
+  button.title = label;
+  button.textContent = direction === "up" ? "↑" : "↓";
+  button.disabled = disabled;
+  button.addEventListener("click", () => moveContainer(container.cookieStoreId, direction));
+  return button;
+}
+
+function restoreMoveFocus(cookieStoreId, direction) {
+  const row = Array.from(document.querySelectorAll(".order-row")).find(
+    (item) => item.dataset.cookieStoreId === cookieStoreId,
+  );
+  if (!row) return;
+
+  const requested = row.querySelector(`[data-direction="${direction}"]`);
+  if (requested && !requested.disabled) {
+    requested.focus();
+    return;
+  }
+
+  const siblingDirection = direction === "up" ? "down" : "up";
+  const sibling = row.querySelector(`[data-direction="${siblingDirection}"]`);
+  if (sibling && !sibling.disabled) sibling.focus();
+}
+
+function renderOrder(focusTarget = null) {
+  const list = document.getElementById("order-list");
+  list.replaceChildren();
+
+  if (!orderedContainers.length) {
+    list.appendChild(emptyState(t("orderEmpty")));
+    return;
+  }
+
+  orderedContainers.forEach((container, index) => {
+    const li = document.createElement("li");
+    li.className = "item-row order-row";
+    li.dataset.cookieStoreId = container.cookieStoreId;
+
+    const shortcut = document.createElement("span");
+    shortcut.className = "order-shortcut";
+    shortcut.textContent = index < 9 ? String(index + 1) : "—";
+    if (index >= 9) shortcut.classList.add("no-shortcut");
+    const name = document.createElement("span");
+    name.className = "order-name";
+    name.textContent = container.name;
+
+    const controls = document.createElement("span");
+    controls.className = "order-controls";
+    controls.append(
+      createMoveButton(container, "up", index === 0),
+      createMoveButton(container, "down", index === orderedContainers.length - 1),
+    );
+
+    li.append(shortcut, createContainerSwatch(container), name, controls);
+    list.appendChild(li);
+  });
+
+  if (focusTarget) restoreMoveFocus(focusTarget.cookieStoreId, focusTarget.direction);
+}
+
+async function moveContainer(cookieStoreId, direction) {
+  const currentIndex = orderedContainers.findIndex(
+    (container) => container.cookieStoreId === cookieStoreId,
+  );
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= orderedContainers.length) return;
+
+  [orderedContainers[currentIndex], orderedContainers[targetIndex]] = [
+    orderedContainers[targetIndex],
+    orderedContainers[currentIndex],
+  ];
+
+  await cgSaveOrder(orderedContainers.map((container) => container.cookieStoreId));
+  renderOrder({ cookieStoreId, direction });
+  showToast(t("toastOrderSaved"));
+}
+
+async function loadOrder() {
+  orderedContainers = await cgGetOrderedContainers();
+  renderOrder();
+}
+
+// ─── Avisos y estados vacíos ─────────────────────────────────────────────
 
 function showToast(msg) {
   let toast = document.querySelector(".cg-toast");
@@ -173,7 +288,8 @@ function emptyState(msg) {
   return li;
 }
 
-// ─── Init ─────────────────────────────────────────────────────────────────
+// ─── Inicio ──────────────────────────────────────────────────────────────
 
 loadWhitelist();
 loadRules();
+loadOrder();
