@@ -1,5 +1,5 @@
 /**
- * ContainerGate - i18n.js
+ * Gatekey - i18n.js
  * Reemplaza el texto de los elementos marcados con atributos data-i18n*
  * usando browser.i18n.getMessage(). Se ejecuta en cada página HTML.
  */

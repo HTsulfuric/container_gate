@@ -1,5 +1,5 @@
 /**
- * ContainerGate - background.js
+ * Gatekey - background.js
  * Intercepta URLs que llegan desde aplicaciones externas al navegador
  * ANTES de que la página cargue y muestra un selector de contenedor.
  */
