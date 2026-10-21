@@ -7,6 +7,22 @@
 const STORAGE_KEYS = {
   WHITELIST: "cg_whitelist",       // dominios que nunca preguntan
   RULES: "cg_rules",               // domain -> containerId guardados
+  ORDER: "cg_order",               // orden fijo de contenedores (ver order.js)
+};
+
+// Caché en memoria del background.
+//
+// Cada lectura de storage o de contextualIdentities es una ida al proceso
+// padre; si ocurre dentro de onBeforeRequest (blocking) o mientras la
+// interstitial pinta, el usuario ve ese retardo. Por eso el background las
+// mantiene calientes y la interstitial/popup las pide de una sola vez con
+// CG_PRELOAD. La caché se invalida sola: storage.onChanged y los eventos de
+// contextualIdentities.
+const cache = {
+  whitelist: null,
+  rules: null,
+  order: null,
+  containers: null,
 };
 
 // Pestañas creadas durante esta sesión sin tab de origen (candidatas a "externas").
@@ -22,18 +38,67 @@ const selfOpenedTabs = new Set();
 // ─────────────────────────────────────────────
 
 async function getWhitelist() {
+  if (cache.whitelist) return cache.whitelist;
   const result = await browser.storage.local.get(STORAGE_KEYS.WHITELIST);
-  return result[STORAGE_KEYS.WHITELIST] || [];
+  cache.whitelist = result[STORAGE_KEYS.WHITELIST] || [];
+  return cache.whitelist;
 }
 
 async function getRules() {
+  if (cache.rules) return cache.rules;
   const result = await browser.storage.local.get(STORAGE_KEYS.RULES);
-  return result[STORAGE_KEYS.RULES] || {};
+  cache.rules = result[STORAGE_KEYS.RULES] || {};
+  return cache.rules;
+}
+
+async function getOrder() {
+  if (cache.order) return cache.order;
+  const result = await browser.storage.local.get(STORAGE_KEYS.ORDER);
+  cache.order = Array.isArray(result[STORAGE_KEYS.ORDER]) ? result[STORAGE_KEYS.ORDER] : [];
+  return cache.order;
+}
+
+// Un solo viaje a contextualIdentities; un contenedor vacío nunca se cachea
+// (sería un "no hay contenedores" fantasma en el picker).
+async function getContainers() {
+  if (cache.containers && cache.containers.length) return cache.containers;
+  const containers = await browser.contextualIdentities.query({});
+  if (containers.length) cache.containers = containers;
+  return containers;
 }
 
 async function saveRules(rules) {
+  cache.rules = rules;
   await browser.storage.local.set({ [STORAGE_KEYS.RULES]: rules });
 }
+
+// ─────────────────────────────────────────────
+// Invalidación de la caché
+// ─────────────────────────────────────────────
+
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (STORAGE_KEYS.WHITELIST in changes) cache.whitelist = changes[STORAGE_KEYS.WHITELIST].newValue || [];
+  if (STORAGE_KEYS.RULES in changes) cache.rules = changes[STORAGE_KEYS.RULES].newValue || {};
+  if (STORAGE_KEYS.ORDER in changes) {
+    cache.order = Array.isArray(changes[STORAGE_KEYS.ORDER].newValue) ? changes[STORAGE_KEYS.ORDER].newValue : [];
+  }
+});
+
+for (const event of [
+  browser.contextualIdentities.onCreated,
+  browser.contextualIdentities.onUpdated,
+  browser.contextualIdentities.onRemoved,
+]) {
+  if (event) event.addListener(() => { cache.containers = null; });
+}
+
+// Calentar la caché al arrancar: el primer enlace externo no paga el coste de
+// abrir storage ni de consultar los contenedores.
+async function warmCache() {
+  try { await Promise.all([getWhitelist(), getRules(), getOrder(), getContainers()]); } catch (_) {}
+}
+warmCache();
 
 function getDomain(url) {
   try {
@@ -114,22 +179,25 @@ async function handleRequest(details) {
   // Si la navegación fue iniciada por otra página (clic/JS), no es externa.
   if (details.originUrl || details.documentUrl) return {};
 
-  // Si la pestaña YA está en un contenedor (escribiste la URL a mano dentro de
-  // un contenedor), no preguntamos: que cargue directo en ese contenedor.
-  try {
-    const tab = await browser.tabs.get(tabId);
-    if (tab.cookieStoreId && tab.cookieStoreId !== "firefox-default") return {};
-  } catch (_) {}
-
   const domain = getDomain(url);
   if (!domain) return {};
 
+  // Las tres lecturas van en paralelo (y salen de la caché): cada await por
+  // separado aquí mantiene la carga de la pestaña suspendida.
+  const [tab, whitelist, rules] = await Promise.all([
+    browser.tabs.get(tabId).catch(() => null),
+    getWhitelist(),
+    getRules(),
+  ]);
+
+  // Si la pestaña YA está en un contenedor (escribiste la URL a mano dentro de
+  // un contenedor), no preguntamos: que cargue directo en ese contenedor.
+  if (tab && tab.cookieStoreId && tab.cookieStoreId !== "firefox-default") return {};
+
   // Lista blanca: dejar pasar tal cual.
-  const whitelist = await getWhitelist();
   if (whitelist.includes(domain)) return {};
 
   // Regla guardada: abrir directo en su contenedor (cancelando esta carga).
-  const rules = await getRules();
   const ruleId = rules[domain];
   if (ruleId && ruleId !== "ask") {
     openInContainer(url, ruleId, tabId);
@@ -187,8 +255,14 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 
     // Popup pide la lista de containers
     case "CG_GET_CONTAINERS": {
-      const containers = await browser.contextualIdentities.query({});
-      return Promise.resolve(containers);
+      return Promise.resolve(await getContainers());
+    }
+
+    // Interstitial/popup piden contenedores + orden de una sola pasada, sin que
+    // la página tenga que consultar storage ni contextualIdentities por su lado.
+    case "CG_PRELOAD": {
+      const [containers, order] = await Promise.all([getContainers(), getOrder()]);
+      return Promise.resolve({ containers, order });
     }
 
     // Popup pide whitelist
@@ -198,6 +272,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 
     // Popup actualiza whitelist
     case "CG_SET_WHITELIST": {
+      cache.whitelist = message.whitelist || [];
       await browser.storage.local.set({ [STORAGE_KEYS.WHITELIST]: message.whitelist });
       return Promise.resolve(true);
     }
